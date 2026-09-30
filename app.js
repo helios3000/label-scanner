@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 
 // ---------- Storage ----------
 const store = {
@@ -461,5 +461,15 @@ $('#version').textContent = 'v' + APP_VERSION;
 // ---------- Init ----------
 renderSession();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW register failed', e));
+  // Reload once when a new version takes over, so the update shows without a second restart
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || running) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then((reg) => reg.update())
+    .catch((e) => console.warn('SW register failed', e));
 }
