@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.3.3';
+const APP_VERSION = '0.4.0';
 
 // ---------- Storage ----------
 const store = {
@@ -18,9 +18,12 @@ const store = {
 let items = store.get('ls.items', {});        // code -> { name, memo, updated }
 let session = store.get('ls.session', []);    // [{ code, time }]
 let settings = Object.assign(
-  { formats: 'qr', res: '720', sound: true, multi: true },
+  { formats: 'qr', res: '720', sound: true, multi: true, fps: '10', autostop: '30', zoom: '1' },
   store.get('ls.settings', {}),
 );
+// v0.2 stored zoom as a slider number; snap to the select options
+if (!['1', '1.5', '2', '3'].includes(String(settings.zoom))) settings.zoom = '1';
+settings.zoom = String(settings.zoom);
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -101,6 +104,8 @@ let stream = null;
 let detector = null;
 let audioCtx = null;
 let msAvg = 0;
+let lastActivity = 0;  // last time any code was in view, for auto-stop
+let rateStart = 0, rateCount = 0;
 let seen = new Set(session.map((s) => s.code));
 
 function beep() {
@@ -138,12 +143,14 @@ async function startScan() {
   video.srcObject = stream;
   await video.play();
   maxFrameSide = w;
-  setupZoom(stream.getVideoTracks()[0]);
+  applyZoom(stream.getVideoTracks()[0]);
 
   const formats = FORMAT_SETS[settings.formats];
   detector = new BarcodeDetectionAPI.BarcodeDetector(formats ? { formats } : undefined);
 
   running = true;
+  lastActivity = performance.now();
+  rateStart = rateCount = 0;
   $('#viewer-msg').style.display = 'none';
   const btn = $('#btn-start');
   btn.textContent = '스캔 중지';
@@ -152,34 +159,19 @@ async function startScan() {
 }
 
 // Zoom lets small labels fill more pixels without moving closer than the focus distance
-function setupZoom(track) {
-  const row = $('#zoom-row');
+function applyZoom(track) {
   const caps = track?.getCapabilities?.();
   if (!caps?.zoom || caps.zoom.max <= caps.zoom.min) {
-    row.hidden = true;
+    $('#stat-zoom').textContent = '미지원';
     return;
   }
-  const slider = $('#zoom');
-  slider.min = caps.zoom.min;
-  slider.max = Math.min(caps.zoom.max, 5);
-  slider.step = caps.zoom.step || 0.1;
-  const initial = Math.min(Math.max(settings.zoom ?? caps.zoom.min, caps.zoom.min), +slider.max);
-  slider.value = initial;
-  row.hidden = false;
-  const apply = () => {
-    const z = +slider.value;
-    $('#zoom-val').textContent = z.toFixed(1) + 'x';
-    track.applyConstraints({ advanced: [{ zoom: z }] }).catch((e) => console.warn('zoom failed', e));
-    settings.zoom = z;
-    store.set('ls.settings', settings);
-  };
-  slider.oninput = apply;
-  apply();
+  $('#stat-zoom').textContent = `지원 (최대 ${caps.zoom.max}x)`;
+  const z = Math.min(Math.max(+settings.zoom, caps.zoom.min), caps.zoom.max);
+  track.applyConstraints({ advanced: [{ zoom: z }] }).catch((e) => console.warn('zoom failed', e));
 }
 
 function stopScan() {
   running = false;
-  $('#zoom-row').hidden = true;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   video.srcObject = null;
@@ -201,9 +193,18 @@ async function loop() {
     }
     if (video.paused) video.play().catch(() => {});
 
+    const autostop = +settings.autostop * 1000;
+    if (autostop && performance.now() - lastActivity > autostop) {
+      stopScan();
+      toast(`${settings.autostop}초 동안 인식이 없어 자동 정지했습니다`);
+      return;
+    }
+
+    const frameStart = performance.now();
     if (video.readyState >= 2 && video.videoWidth) {
       const scale = Math.min(1, maxFrameSide / Math.max(video.videoWidth, video.videoHeight));
       $('#stat-res').textContent = `${video.videoWidth}×${video.videoHeight}`;
+      if (!rateStart) rateStart = frameStart;
       frame.width = Math.round(video.videoWidth * scale);
       frame.height = Math.round(video.videoHeight * scale);
       frameCtx.drawImage(video, 0, 0, frame.width, frame.height);
@@ -217,13 +218,23 @@ async function loop() {
       }
       const ms = performance.now() - t0;
       msAvg = msAvg ? msAvg * 0.9 + ms * 0.1 : ms;
-      $('#stat-ms').textContent = Math.round(msAvg);
+      $('#stat-ms').textContent = Math.round(msAvg) + ' ms/프레임';
 
       if (!settings.multi && results.length > 1) results = results.slice(0, 1);
+      if (results.length) lastActivity = performance.now();
       handleResults(results, scale);
+
+      rateCount++;
+      if (frameStart - rateStart >= 1000) {
+        $('#stat-fps').textContent = (rateCount * 1000 / (frameStart - rateStart)).toFixed(1) + '회/초';
+        rateStart = frameStart;
+        rateCount = 0;
+      }
     }
-    // Yield so the UI stays responsive
-    await new Promise((r) => requestAnimationFrame(r));
+    // Cap detections per second to save battery, then yield so the UI stays responsive
+    const fps = +settings.fps;
+    const wait = fps ? 1000 / fps - (performance.now() - frameStart) : 0;
+    await new Promise((r) => setTimeout(r, Math.max(0, wait)));
   }
 }
 
@@ -482,7 +493,14 @@ $('#set-formats').value = settings.formats;
 $('#set-res').value = settings.res;
 $('#set-sound').checked = settings.sound;
 $('#set-multi').checked = settings.multi;
-for (const [id, key, prop] of [['#set-formats', 'formats', 'value'], ['#set-res', 'res', 'value'], ['#set-sound', 'sound', 'checked'], ['#set-multi', 'multi', 'checked']]) {
+$('#set-fps').value = settings.fps;
+$('#set-autostop').value = settings.autostop;
+$('#set-zoom').value = settings.zoom;
+for (const [id, key, prop] of [
+  ['#set-formats', 'formats', 'value'], ['#set-res', 'res', 'value'], ['#set-sound', 'sound', 'checked'],
+  ['#set-multi', 'multi', 'checked'], ['#set-fps', 'fps', 'value'], ['#set-autostop', 'autostop', 'value'],
+  ['#set-zoom', 'zoom', 'value'],
+]) {
   $(id).addEventListener('change', (e) => {
     settings[key] = e.target[prop];
     store.set('ls.settings', settings);

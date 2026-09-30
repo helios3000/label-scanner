@@ -33,15 +33,8 @@
     </div>
     <div class="row stats">
       <span>인식 <b id="stat-count">0</b>건</span>
-      <span>처리 <b id="stat-ms">-</b> ms/프레임</span>
-      <span>카메라 <b id="stat-res">-</b></span>
+      <span id="stat-last"></span>
     </div>
-    <div class="row" id="zoom-row" hidden>
-      <span>줌</span>
-      <input id="zoom" type="range">
-      <b id="zoom-val"></b>
-    </div>
-    <div class="row stats"><span id="stat-last"></span></div>
     <div class="row">
       <button id="btn-start" class="primary big">스캔 시작</button>
     </div>
@@ -72,6 +65,7 @@
 
   <!-- Settings tab -->
   <section id="tab-settings" class="tab">
+    <h3>스캔</h3>
     <div class="card">
       <label>인식할 코드
         <select id="set-formats">
@@ -80,16 +74,54 @@
           <option value="all">전체</option>
         </select>
       </label>
-      <label>카메라 해상도
-        <select id="set-res">
-          <option value="720">1280×720 (빠름)</option>
-          <option value="1080">1920×1080 (작은 라벨)</option>
-        </select>
-      </label>
       <label class="check"><input id="set-sound" type="checkbox" checked> 인식 시 소리</label>
       <label class="check"><input id="set-multi" type="checkbox" checked> 한 화면에서 여러 개 동시 인식</label>
     </div>
-    <p class="hint">설정은 다음 스캔 시작부터 적용됩니다.</p>
+
+    <h3>성능 · 배터리</h3>
+    <div class="card">
+      <label>카메라 해상도
+        <select id="set-res">
+          <option value="720">1280×720 (배터리 절약)</option>
+          <option value="1080">1920×1080 (작은 라벨)</option>
+        </select>
+      </label>
+      <label>초당 인식 횟수
+        <select id="set-fps">
+          <option value="5">5회 (배터리 절약)</option>
+          <option value="10">10회</option>
+          <option value="15">15회</option>
+          <option value="0">제한 없음 (최대 속도)</option>
+        </select>
+      </label>
+      <label>자동 정지 (코드가 안 보이는 시간)
+        <select id="set-autostop">
+          <option value="10">10초</option>
+          <option value="20">20초</option>
+          <option value="30">30초</option>
+          <option value="0">없음</option>
+        </select>
+      </label>
+      <label>카메라 줌
+        <select id="set-zoom">
+          <option value="1">1x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint">해상도·줌은 다음 스캔 시작부터, 나머지는 바로 적용됩니다.</p>
+
+    <h3>성능 정보 <small class="hint">(마지막 스캔 기준)</small></h3>
+    <div class="card info">
+      <div><span>카메라 해상도</span><b id="stat-res">-</b></div>
+      <div><span>처리 시간</span><b id="stat-ms">-</b></div>
+      <div><span>실제 인식 횟수</span><b id="stat-fps">-</b></div>
+      <div><span>줌 지원</span><b id="stat-zoom">-</b></div>
+    </div>
+
+    <h3>기타</h3>
     <p class="hint"><a href="test-labels.html" target="_blank">테스트 라벨 페이지 열기</a></p>
     <div class="row">
       <button id="btn-update">업데이트 확인 / 새로고침</button>

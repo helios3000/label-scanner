@@ -34,6 +34,12 @@ input, select { width: 100%; background: var(--bg); color: var(--text); border: 
 .card label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px; }
 .card label.check input { width: auto; }
 .hint { color: var(--muted); font-size: 13px; }
+h3 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 20px 4px 8px; }
+h3:first-child { margin-top: 8px; }
+h3 small { font-weight: 400; }
+.card.info { gap: 6px; }
+.card.info div { display: flex; justify-content: space-between; }
+.card.info span { color: var(--muted); }
 .hint a { color: var(--accent); }
 
 #viewer { position: relative; width: 100%; aspect-ratio: 3 / 4; max-height: 55vh; background: #000; border-radius: 10px; overflow: hidden; }
