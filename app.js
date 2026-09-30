@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.3.3';
 
 // ---------- Storage ----------
 const store = {
@@ -35,6 +35,29 @@ function toast(msg) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// In-page dialogs: native confirm()/prompt() freeze the iOS camera preview
+function openDialog(message, withInput) {
+  return new Promise((resolve) => {
+    const dlg = $('#dialog');
+    const input = $('#dialog-input');
+    $('#dialog-msg').textContent = message;
+    input.hidden = !withInput;
+    input.value = '';
+    dlg.hidden = false;
+    if (withInput) input.focus();
+    const done = (ok) => {
+      dlg.hidden = true;
+      $('#dialog-ok').onclick = $('#dialog-cancel').onclick = input.onkeydown = null;
+      resolve(ok ? (withInput ? input.value : true) : (withInput ? null : false));
+    };
+    $('#dialog-ok').onclick = () => done(true);
+    $('#dialog-cancel').onclick = () => done(false);
+    input.onkeydown = (e) => { if (e.key === 'Enter') done(true); };
+  });
+}
+const askConfirm = (message) => openDialog(message, false);
+const askText = (message) => openDialog(message, true);
 
 function fmtTime(ts) {
   const d = new Date(ts);
@@ -169,6 +192,15 @@ function stopScan() {
 
 async function loop() {
   while (running) {
+    // Recover if iOS interrupted the camera (alerts, calls, Control Center)
+    const track = stream?.getVideoTracks()[0];
+    if (track?.readyState === 'ended') {
+      stopScan();
+      await startScan();
+      return;
+    }
+    if (video.paused) video.play().catch(() => {});
+
     if (video.readyState >= 2 && video.videoWidth) {
       const scale = Math.min(1, maxFrameSide / Math.max(video.videoWidth, video.videoHeight));
       $('#stat-res').textContent = `${video.videoWidth}×${video.videoHeight}`;
@@ -285,11 +317,11 @@ function renderSession(highlight = []) {
   }).join('');
 }
 
-$('#session-list').addEventListener('click', (e) => {
+$('#session-list').addEventListener('click', async (e) => {
   const reg = e.target.dataset.register;
   const rem = e.target.dataset.remove;
   if (reg) {
-    const name = prompt(`${reg} 이름을 입력하세요`);
+    const name = await askText(`${reg} 이름을 입력하세요`);
     if (name?.trim()) {
       items[reg] = { name: name.trim(), memo: '', updated: Date.now() };
       store.set('ls.items', items);
@@ -303,8 +335,8 @@ $('#session-list').addEventListener('click', (e) => {
   }
 });
 
-$('#btn-clear').addEventListener('click', () => {
-  if (!session.length || !confirm('스캔 목록을 비울까요? (품목 목록은 유지됩니다)')) return;
+$('#btn-clear').addEventListener('click', async () => {
+  if (!session.length || !(await askConfirm('스캔 목록을 비울까요? (품목 목록은 유지됩니다)'))) return;
   session = [];
   seen = new Set();
   store.set('ls.session', session);
@@ -400,7 +432,7 @@ $('#item-form').addEventListener('submit', (e) => {
   renderSession();
 });
 
-$('#item-list').addEventListener('click', (e) => {
+$('#item-list').addEventListener('click', async (e) => {
   const edit = e.target.dataset.edit;
   const del = e.target.dataset.del;
   if (edit) {
@@ -409,7 +441,7 @@ $('#item-list').addEventListener('click', (e) => {
     $('#item-name').value = it.name;
     $('#item-memo').value = it.memo || '';
     $('#item-name').focus();
-  } else if (del && confirm(`${del} (${items[del].name}) 삭제할까요?`)) {
+  } else if (del && (await askConfirm(`${del} (${items[del].name}) 삭제할까요?`))) {
     delete items[del];
     store.set('ls.items', items);
     renderItems();

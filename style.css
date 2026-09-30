@@ -58,5 +58,9 @@ input, select { width: 100%; background: var(--bg); color: var(--text); border: 
 @keyframes newrow { from { background: rgba(63,185,80,.25); } to { background: transparent; } }
 .empty { color: var(--muted); text-align: center; padding: 24px 0; }
 
+#dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#dialog .card { width: 100%; max-width: 360px; }
+#dialog-msg { font-size: 16px; line-height: 1.5; }
+
 #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; border-radius: 20px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
 #toast.show { opacity: 1; }
