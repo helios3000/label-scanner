@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 
 // ---------- Storage ----------
 const store = {
@@ -469,7 +469,20 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     reloaded = true;
     location.reload();
   });
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
-    .then((reg) => reg.update())
-    .catch((e) => console.warn('SW register failed', e));
+  const swReady = navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+  swReady.then((reg) => reg.update()).catch((e) => console.warn('SW register failed', e));
+
+  // iOS keeps home-screen apps alive in the background, so also check when brought back to front
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) swReady.then((reg) => reg.update()).catch(() => {});
+  });
+
+  $('#btn-update').addEventListener('click', async () => {
+    if (running) stopScan();
+    toast('업데이트 확인 중…');
+    try { await (await swReady).update(); } catch {}
+    location.reload();
+  });
+} else {
+  $('#btn-update').addEventListener('click', () => location.reload());
 }
