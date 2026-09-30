@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>테스트 라벨</title>
+<style>
+  :root { --line: #d0d7de; --muted: #57606a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; font: 14px/1.4 -apple-system, "Segoe UI", sans-serif; color: #111; background: #fff; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+  .controls label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+  .controls input, .controls select { font-size: 14px; padding: 6px; width: 110px; }
+  button { font-size: 14px; padding: 7px 14px; cursor: pointer; }
+  .grid { display: flex; flex-wrap: wrap; gap: 6mm; align-items: flex-end; }
+  .label { display: inline-flex; flex-direction: column; align-items: center; gap: 1mm; }
+  .label .cap { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); }
+  .label svg { display: block; }
+  @media print {
+    .controls, .noprint { display: none; }
+    body { padding: 0; }
+    h2 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<h1>테스트 라벨</h1>
+<p class="hint">모니터에 띄우거나 인쇄해서 스캐너 앱으로 찍어 보세요. 크기(mm)는 인쇄할 때만 정확하고, 모니터에서는 대략적인 크기입니다.</p>
+
+<div class="controls">
+  <label>접두어<input id="prefix" value="A"></label>
+  <label>시작 번호<input id="start" type="number" value="1" min="0"></label>
+  <label>개수<input id="count" type="number" value="24" min="1" max="200"></label>
+  <label>코드 종류
+    <select id="type">
+      <option value="qr">QR</option>
+      <option value="code128">바코드 (Code128)</option>
+    </select>
+  </label>
+  <label>크기 (mm)<input id="size" type="number" value="12" min="4" max="60"></label>
+  <button id="apply">적용</button>
+  <button onclick="print()">인쇄</button>
+</div>
+
+<h2>1. 크기 비교 (같은 코드, 크기만 다름)</h2>
+<p class="hint">어느 크기부터 안정적으로 인식되는지 확인합니다. QR은 한 변 길이, 바코드는 높이 기준입니다.</p>
+<div id="size-grid" class="grid"></div>
+
+<h2>2. 연속 스캔 시트</h2>
+<p class="hint">휴대폰을 천천히 움직이며 훑어서 모두 인식되는지 확인합니다.</p>
+<div id="sheet-grid" class="grid"></div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/JsBarcode.all.min.js"></script>
+<script>
+'use strict';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function qrSvg(text, sizeMm) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  const quiet = 2; // quiet zone in modules (spec recommends 4; 2 saves tape space)
+  const total = n + quiet * 2;
+  let d = '';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (qr.isDark(r, c)) d += `M${c + quiet} ${r + quiet}h1v1h-1z`;
+    }
+  }
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${total} ${total}`);
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.style.width = svg.style.height = sizeMm + 'mm';
+  svg.innerHTML = `<rect width="${total}" height="${total}" fill="#fff"/><path d="${d}" fill="#000"/>`;
+  svg.dataset.code = text;
+  return svg;
+}
+
+function barcodeSvg(text, heightMm) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  JsBarcode(svg, text, { format: 'CODE128', width: 2, height: 60, margin: 10, displayValue: false });
+  // Scale proportionally to the requested height
+  const w = parseFloat(svg.getAttribute('width')), h = parseFloat(svg.getAttribute('height'));
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.style.height = heightMm + 'mm';
+  svg.style.width = (heightMm * w / h) + 'mm';
+  svg.dataset.code = text;
+  return svg;
+}
+
+function makeLabel(text, type, sizeMm, caption) {
+  const wrap = document.createElement('div');
+  wrap.className = 'label';
+  wrap.appendChild(type === 'qr' ? qrSvg(text, sizeMm) : barcodeSvg(text, sizeMm));
+  const cap = document.createElement('div');
+  cap.className = 'cap';
+  cap.textContent = caption ?? text;
+  wrap.appendChild(cap);
+  return wrap;
+}
+
+function codeAt(i) {
+  const prefix = document.getElementById('prefix').value.trim();
+  return prefix + String(i).padStart(4, '0');
+}
+
+function render() {
+  const type = document.getElementById('type').value;
+  const start = +document.getElementById('start').value || 0;
+  const count = Math.min(200, Math.max(1, +document.getElementById('count').value || 1));
+  const size = Math.max(4, +document.getElementById('size').value || 12);
+
+  const sizeGrid = document.getElementById('size-grid');
+  sizeGrid.innerHTML = '';
+  const sizes = type === 'qr' ? [6, 8, 10, 12, 15, 20] : [5, 7, 9, 12, 15];
+  const sample = codeAt(start);
+  for (const s of sizes) sizeGrid.appendChild(makeLabel(sample, type, s, `${sample} · ${s}mm`));
+
+  const sheet = document.getElementById('sheet-grid');
+  sheet.innerHTML = '';
+  for (let i = 0; i < count; i++) sheet.appendChild(makeLabel(codeAt(start + i), type, size));
+}
+
+document.getElementById('apply').addEventListener('click', render);
+render();
+</script>
+</body>
+</html>

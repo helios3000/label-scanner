@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="라벨스캔">
+<meta name="theme-color" content="#111418">
+<title>라벨 스캐너</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <button data-tab="scan" class="active">스캔</button>
+    <button data-tab="items">품목</button>
+    <button data-tab="settings">설정</button>
+  </nav>
+</header>
+
+<main>
+  <!-- Scan tab -->
+  <section id="tab-scan" class="tab active">
+    <div id="viewer">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="viewer-msg">시작 버튼을 누르면 카메라가 켜집니다</div>
+    </div>
+    <div class="row stats">
+      <span>인식 <b id="stat-count">0</b>건</span>
+      <span>처리 <b id="stat-ms">-</b> ms/프레임</span>
+      <span id="stat-last"></span>
+    </div>
+    <div class="row">
+      <button id="btn-start" class="primary big">스캔 시작</button>
+    </div>
+    <div class="row">
+      <button id="btn-clear">목록 비우기</button>
+      <button id="btn-export-session">CSV 내보내기</button>
+    </div>
+    <ul id="session-list" class="list"></ul>
+  </section>
+
+  <!-- Items tab -->
+  <section id="tab-items" class="tab">
+    <form id="item-form" class="card">
+      <input id="item-code" placeholder="코드 (예: A0001)" required autocomplete="off">
+      <input id="item-name" placeholder="이름" required autocomplete="off">
+      <input id="item-memo" placeholder="메모 (위치 등)" autocomplete="off">
+      <button class="primary" type="submit">저장</button>
+    </form>
+    <div class="row">
+      <input id="item-search" placeholder="검색" autocomplete="off">
+    </div>
+    <div class="row">
+      <button id="btn-export-items">CSV 내보내기</button>
+      <label class="button">CSV 가져오기<input id="file-import" type="file" accept=".csv,text/csv" hidden></label>
+    </div>
+    <ul id="item-list" class="list"></ul>
+  </section>
+
+  <!-- Settings tab -->
+  <section id="tab-settings" class="tab">
+    <div class="card">
+      <label>인식할 코드
+        <select id="set-formats">
+          <option value="qr">QR만</option>
+          <option value="qr_linear">QR + 바코드 (Code128/39, EAN)</option>
+          <option value="all">전체</option>
+        </select>
+      </label>
+      <label>카메라 해상도
+        <select id="set-res">
+          <option value="720">1280×720 (빠름)</option>
+          <option value="1080">1920×1080 (작은 라벨)</option>
+        </select>
+      </label>
+      <label class="check"><input id="set-sound" type="checkbox" checked> 인식 시 소리</label>
+      <label class="check"><input id="set-multi" type="checkbox" checked> 한 화면에서 여러 개 동시 인식</label>
+    </div>
+    <p class="hint">설정은 다음 스캔 시작부터 적용됩니다.</p>
+    <p class="hint"><a href="test-labels.html" target="_blank">테스트 라벨 페이지 열기</a></p>
+    <p class="hint" id="version"></p>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script src="vendor/barcode-detector.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
