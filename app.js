@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 
 // ---------- Storage ----------
 const store = {
@@ -260,6 +260,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Session list ----------
+// Natural order so A2 < A10
+const byCode = (a, b) => a.code.localeCompare(b.code, undefined, { numeric: true });
+
 function renderSession(highlight = []) {
   $('#stat-count').textContent = session.length;
   const ul = $('#session-list');
@@ -267,7 +270,7 @@ function renderSession(highlight = []) {
     ul.innerHTML = '<li class="empty">스캔한 코드가 여기에 표시됩니다</li>';
     return;
   }
-  ul.innerHTML = session.map((s) => {
+  ul.innerHTML = [...session].sort(byCode).map((s) => {
     const it = items[s.code];
     const cls = highlight.includes(s.code) ? ' class="new"' : '';
     return `<li${cls}>
@@ -356,7 +359,7 @@ function stamp() {
 $('#btn-export-session').addEventListener('click', () => {
   if (!session.length) return toast('내보낼 항목이 없습니다');
   const rows = [['시간', '코드', '이름', '메모']];
-  for (const s of [...session].reverse()) {
+  for (const s of [...session].sort(byCode)) {
     const it = items[s.code];
     rows.push([new Date(s.time).toLocaleString('ko-KR', { hour12: false }), s.code, it?.name ?? '', it?.memo ?? '']);
   }

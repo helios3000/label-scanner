@@ -40,7 +40,7 @@
       <option value="code128">바코드 (Code128)</option>
     </select>
   </label>
-  <label>크기 (mm)<input id="size" type="number" value="12" min="4" max="60"></label>
+  <label>크기 (mm)<input id="size" type="number" value="20" min="4" max="60"></label>
   <button id="apply">적용</button>
   <button onclick="print()">인쇄</button>
 </div>
@@ -122,7 +122,7 @@ function render() {
 
   const sizeGrid = document.getElementById('size-grid');
   sizeGrid.innerHTML = '';
-  const sizes = type === 'qr' ? [6, 8, 10, 12, 15, 20] : [5, 7, 9, 12, 15];
+  const sizes = type === 'qr' ? [15, 20, 25, 30] : [5, 7, 9, 12, 15];
   const sample = codeAt(start);
   for (const s of sizes) sizeGrid.appendChild(makeLabel(sample, type, s, `${sample} · ${s}mm`));
 

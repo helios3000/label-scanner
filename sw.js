@@ -1,5 +1,5 @@
 // Bump CACHE when any cached file changes
-const CACHE = 'label-scanner-v2';
+const CACHE = 'label-scanner-v3';
 const ASSETS = [
   './',
   'index.html',
