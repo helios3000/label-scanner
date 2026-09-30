@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 
 // ---------- Storage ----------
 const store = {
@@ -71,7 +71,7 @@ const overlay = $('#overlay');
 const viewer = $('#viewer');
 const frame = document.createElement('canvas');
 const frameCtx = frame.getContext('2d', { willReadFrequently: true });
-const MAX_FRAME_SIDE = 1280; // downscale large frames to keep detection fast
+let maxFrameSide = 1280; // downscale large frames to keep detection fast
 
 let running = false;
 let stream = null;
@@ -114,6 +114,8 @@ async function startScan() {
   }
   video.srcObject = stream;
   await video.play();
+  maxFrameSide = w;
+  setupZoom(stream.getVideoTracks()[0]);
 
   const formats = FORMAT_SETS[settings.formats];
   detector = new BarcodeDetectionAPI.BarcodeDetector(formats ? { formats } : undefined);
@@ -126,8 +128,35 @@ async function startScan() {
   loop();
 }
 
+// Zoom lets small labels fill more pixels without moving closer than the focus distance
+function setupZoom(track) {
+  const row = $('#zoom-row');
+  const caps = track?.getCapabilities?.();
+  if (!caps?.zoom || caps.zoom.max <= caps.zoom.min) {
+    row.hidden = true;
+    return;
+  }
+  const slider = $('#zoom');
+  slider.min = caps.zoom.min;
+  slider.max = Math.min(caps.zoom.max, 5);
+  slider.step = caps.zoom.step || 0.1;
+  const initial = Math.min(Math.max(settings.zoom ?? caps.zoom.min, caps.zoom.min), +slider.max);
+  slider.value = initial;
+  row.hidden = false;
+  const apply = () => {
+    const z = +slider.value;
+    $('#zoom-val').textContent = z.toFixed(1) + 'x';
+    track.applyConstraints({ advanced: [{ zoom: z }] }).catch((e) => console.warn('zoom failed', e));
+    settings.zoom = z;
+    store.set('ls.settings', settings);
+  };
+  slider.oninput = apply;
+  apply();
+}
+
 function stopScan() {
   running = false;
+  $('#zoom-row').hidden = true;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   video.srcObject = null;
@@ -141,7 +170,8 @@ function stopScan() {
 async function loop() {
   while (running) {
     if (video.readyState >= 2 && video.videoWidth) {
-      const scale = Math.min(1, MAX_FRAME_SIDE / Math.max(video.videoWidth, video.videoHeight));
+      const scale = Math.min(1, maxFrameSide / Math.max(video.videoWidth, video.videoHeight));
+      $('#stat-res').textContent = `${video.videoWidth}×${video.videoHeight}`;
       frame.width = Math.round(video.videoWidth * scale);
       frame.height = Math.round(video.videoHeight * scale);
       frameCtx.drawImage(video, 0, 0, frame.width, frame.height);

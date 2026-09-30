@@ -10,6 +10,7 @@
   --danger: #f85149;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 -apple-system, "Segoe UI", sans-serif; }
 body { padding-bottom: env(safe-area-inset-bottom); }
 header { position: sticky; top: 0; z-index: 10; background: var(--bg); padding-top: env(safe-area-inset-top); border-bottom: 1px solid var(--line); }

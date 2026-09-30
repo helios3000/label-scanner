@@ -34,8 +34,14 @@
     <div class="row stats">
       <span>인식 <b id="stat-count">0</b>건</span>
       <span>처리 <b id="stat-ms">-</b> ms/프레임</span>
-      <span id="stat-last"></span>
+      <span>카메라 <b id="stat-res">-</b></span>
     </div>
+    <div class="row" id="zoom-row" hidden>
+      <span>줌</span>
+      <input id="zoom" type="range">
+      <b id="zoom-val"></b>
+    </div>
+    <div class="row stats"><span id="stat-last"></span></div>
     <div class="row">
       <button id="btn-start" class="primary big">스캔 시작</button>
     </div>
