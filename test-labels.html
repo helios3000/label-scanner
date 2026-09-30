@@ -27,11 +27,12 @@
 </style>
 </head>
 <body>
-<h1>테스트 라벨</h1>
-<p class="hint">모니터에 띄우거나 인쇄해서 스캐너 앱으로 찍어 보세요. 크기(mm)는 인쇄할 때만 정확하고, 모니터에서는 대략적인 크기입니다.</p>
+<h1 id="title">테스트 라벨</h1>
+<p class="hint test-only">모니터에 띄우거나 인쇄해서 스캐너 앱으로 찍어 보세요. 크기(mm)는 인쇄할 때만 정확하고, 모니터에서는 대략적인 크기입니다.</p>
 
 <div class="controls">
   <label>접두어<input id="prefix" value="A"></label>
+  <label>자릿수<input id="digits" type="number" value="4" min="1" max="8"></label>
   <label>시작 번호<input id="start" type="number" value="1" min="0"></label>
   <label>개수<input id="count" type="number" value="24" min="1" max="200"></label>
   <label>코드 종류
@@ -45,17 +46,19 @@
   <button onclick="print()">인쇄</button>
 </div>
 
-<div class="noprint" style="margin-top:12px">
+<div class="noprint test-only" style="margin-top:12px">
   <div style="width:50mm;height:4px;background:#d1242f"></div>
   <p class="hint">↑ 이 빨간 선이 50mm입니다. 자로 재서 길이가 다르면 모니터 표시 크기가 실제와 다른 것이니, 아래 mm 값도 같은 비율로 보정해서 보세요.</p>
 </div>
 
+<div class="test-only">
 <h2>1. 크기 비교 (같은 코드, 크기만 다름)</h2>
 <p class="hint">어느 크기부터 안정적으로 인식되는지 확인합니다. QR은 한 변 길이, 바코드는 높이 기준입니다.</p>
 <div id="size-grid" class="grid"></div>
+</div>
 
-<h2>2. 연속 스캔 시트</h2>
-<p class="hint">휴대폰을 천천히 움직이며 훑어서 모두 인식되는지 확인합니다.</p>
+<h2 id="sheet-title">2. 연속 스캔 시트</h2>
+<p class="hint test-only">휴대폰을 천천히 움직이며 훑어서 모두 인식되는지 확인합니다.</p>
 <div id="sheet-grid" class="grid"></div>
 
 <script src="vendor/qrcode.js"></script>
@@ -111,7 +114,8 @@ function makeLabel(text, type, sizeMm, caption) {
 
 function codeAt(i) {
   const prefix = document.getElementById('prefix').value.trim();
-  return prefix + String(i).padStart(4, '0');
+  const digits = Math.min(8, Math.max(1, +document.getElementById('digits').value || 4));
+  return prefix + String(i).padStart(digits, '0');
 }
 
 function render() {
@@ -129,6 +133,17 @@ function render() {
   const sheet = document.getElementById('sheet-grid');
   sheet.innerHTML = '';
   for (let i = 0; i < count; i++) sheet.appendChild(makeLabel(codeAt(start + i), type, size));
+}
+
+// Opened from the app's label maker: ?prefix=A&digits=4&start=25&count=10&size=20&print=1
+const params = new URLSearchParams(location.search);
+for (const key of ['prefix', 'digits', 'start', 'count', 'size', 'type']) {
+  if (params.has(key)) document.getElementById(key).value = params.get(key);
+}
+if (params.get('print') === '1') {
+  document.title = document.getElementById('title').textContent = '라벨 인쇄';
+  document.getElementById('sheet-title').textContent = '라벨';
+  document.querySelectorAll('.test-only').forEach((el) => { el.hidden = true; });
 }
 
 document.getElementById('apply').addEventListener('click', render);

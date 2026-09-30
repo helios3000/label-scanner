@@ -64,6 +64,37 @@ h3 small { font-weight: 400; }
 @keyframes newrow { from { background: rgba(63,185,80,.25); } to { background: transparent; } }
 .empty { color: var(--muted); text-align: center; padding: 24px 0; }
 
+/* Mode bar & location chip */
+#mode { flex: 1; }
+.chip { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 14px; }
+.chip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.on { border-style: solid; border-color: var(--accent); color: var(--text); }
+.chip-x { flex: none !important; padding: 2px 8px; font-size: 12px; }
+
+#found-banner { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 12px; border-radius: 8px; background: #f2cc60; color: #111; font-weight: 700; font-size: 18px; text-align: center; }
+
+/* Segmented control */
+.seg { display: flex; margin: 16px 0 4px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; background: none; color: var(--muted); padding: 9px 0; }
+.seg button.active { background: var(--panel); color: var(--text); font-weight: 600; }
+
+.badge { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: 2px; background: var(--line); color: var(--text); }
+.badge.loc, .badge.m-in, .badge.m-ret { background: rgba(47,129,247,.25); color: #79b8ff; }
+.badge.m-out { background: rgba(248,81,73,.2); color: #ff7b72; }
+.badge.m-lend { background: rgba(210,153,34,.2); color: #e3b341; }
+
+label.check.inline { display: flex; align-items: center; gap: 8px; margin: 10px 4px; }
+label.check.inline input { width: auto; }
+.list li[data-open] { cursor: pointer; }
+.chev { color: var(--muted); font-size: 20px; }
+.list.compact li { padding: 6px 4px; display: block; }
+.cmp h3 { margin-top: 12px; }
+
+details.card { margin-top: 20px; }
+details.card summary { cursor: pointer; font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid2 label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+
 #dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 #dialog .card { width: 100%; max-width: 360px; }
 #dialog-msg { font-size: 16px; line-height: 1.5; }

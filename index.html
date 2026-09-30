@@ -19,6 +19,7 @@
   <nav>
     <button data-tab="scan" class="active">스캔</button>
     <button data-tab="items">품목</button>
+    <button data-tab="history">기록</button>
     <button data-tab="settings">설정</button>
   </nav>
 </header>
@@ -26,10 +27,29 @@
 <main>
   <!-- Scan tab -->
   <section id="tab-scan" class="tab active">
+    <div class="row">
+      <select id="mode">
+        <option value="scan">일반 스캔</option>
+        <option value="in">입고</option>
+        <option value="out">출고</option>
+        <option value="lend">대여</option>
+        <option value="ret">반납</option>
+        <option value="find">찾기</option>
+      </select>
+      <div id="loc-chip" class="chip" title="위치 라벨을 스캔하면 설정됩니다">
+        <span id="loc-text">위치 없음</span>
+        <button id="loc-clear" class="chip-x" hidden>✕</button>
+      </div>
+    </div>
+    <div class="row" id="find-row" hidden>
+      <input id="find-target" placeholder="찾을 코드 (여러 개는 쉼표로)" autocomplete="off">
+    </div>
+
     <div id="viewer">
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
       <div id="viewer-msg">시작 버튼을 누르면 카메라가 켜집니다</div>
+      <div id="found-banner" hidden></div>
     </div>
     <div class="row stats">
       <span>인식 <b id="stat-count">0</b>건</span>
@@ -39,10 +59,26 @@
       <button id="btn-start" class="primary big">스캔 시작</button>
     </div>
     <div class="row">
+      <button id="btn-manual">직접 입력</button>
+      <button id="btn-save-history">기록 저장</button>
+    </div>
+    <div class="row">
       <button id="btn-clear">목록 비우기</button>
       <button id="btn-export-session">CSV 내보내기</button>
     </div>
+
+    <div class="seg" id="scan-seg">
+      <button data-view="list" class="active">스캔 목록</button>
+      <button data-view="missing">누락 확인 <span id="missing-count"></span></button>
+    </div>
     <ul id="session-list" class="list"></ul>
+    <div id="missing-view" hidden>
+      <label class="check inline"><input id="missing-loc-only" type="checkbox"> 현재 위치의 품목만</label>
+      <h3>등록됐지만 스캔 안 됨</h3>
+      <ul id="missing-items" class="list"></ul>
+      <h3>번호 누락 <small class="hint">(스캔한 번호 사이에 빠진 번호)</small></h3>
+      <ul id="missing-numbers" class="list"></ul>
+    </div>
   </section>
 
   <!-- Items tab -->
@@ -50,17 +86,71 @@
     <form id="item-form" class="card">
       <input id="item-code" placeholder="코드 (예: A0001)" required autocomplete="off">
       <input id="item-name" placeholder="이름" required autocomplete="off">
-      <input id="item-memo" placeholder="메모 (위치 등)" autocomplete="off">
+      <input id="item-memo" placeholder="메모" autocomplete="off">
+      <input id="item-loc" placeholder="위치 코드 (예: LOC-01)" list="loc-options" autocomplete="off">
+      <datalist id="loc-options"></datalist>
       <button class="primary" type="submit">저장</button>
     </form>
     <div class="row">
-      <input id="item-search" placeholder="검색" autocomplete="off">
+      <input id="item-search" placeholder="검색 (코드, 이름, 위치, 상태)" autocomplete="off">
     </div>
     <div class="row">
       <button id="btn-export-items">CSV 내보내기</button>
       <label class="button">CSV 가져오기<input id="file-import" type="file" accept=".csv,text/csv" hidden></label>
     </div>
     <ul id="item-list" class="list"></ul>
+
+    <details class="card" id="label-maker">
+      <summary>라벨 번호 만들기</summary>
+      <div class="grid2">
+        <label>접두어<input id="lm-prefix" autocomplete="off"></label>
+        <label>자릿수<input id="lm-digits" type="number" min="1" max="8"></label>
+        <label>시작 번호<input id="lm-start" type="number" min="0"></label>
+        <label>개수<input id="lm-count" type="number" min="1" max="200" value="10"></label>
+      </div>
+      <p class="hint" id="lm-preview"></p>
+      <div class="row">
+        <button id="lm-print">QR 인쇄 페이지</button>
+        <button id="lm-csv">코드 목록 CSV</button>
+      </div>
+      <p class="hint">시작 번호는 지금까지 쓴 번호 다음으로 자동으로 채워집니다. 위치 라벨은 접두어를 위치 코드 접두어(설정)로 바꿔서 만드세요.</p>
+    </details>
+  </section>
+
+  <!-- History tab -->
+  <section id="tab-history" class="tab">
+    <div class="seg" id="hist-seg">
+      <button data-view="sessions" class="active">스캔 기록</button>
+      <button data-view="log">상태 이력</button>
+    </div>
+
+    <div id="hist-sessions">
+      <ul id="history-list" class="list"></ul>
+    </div>
+
+    <div id="hist-detail" hidden>
+      <div class="row">
+        <button id="hd-back">← 목록</button>
+        <button id="hd-csv">CSV</button>
+        <button id="hd-delete">삭제</button>
+      </div>
+      <h3 id="hd-title"></h3>
+      <div class="row">
+        <select id="hd-compare"></select>
+      </div>
+      <div id="hd-compare-result"></div>
+      <ul id="hd-entries" class="list"></ul>
+    </div>
+
+    <div id="hist-log" hidden>
+      <div class="row">
+        <input id="log-search" placeholder="코드 또는 이름으로 검색" autocomplete="off">
+      </div>
+      <div class="row">
+        <button id="btn-export-log">CSV 내보내기</button>
+      </div>
+      <ul id="log-list" class="list"></ul>
+    </div>
   </section>
 
   <!-- Settings tab -->
@@ -73,6 +163,9 @@
           <option value="qr_linear">QR + 바코드 (Code128/39, EAN)</option>
           <option value="all">전체</option>
         </select>
+      </label>
+      <label>위치 코드 접두어 <small>(이 글자로 시작하는 코드는 위치 라벨로 인식)</small>
+        <input id="set-locprefix" autocomplete="off">
       </label>
       <label class="check"><input id="set-sound" type="checkbox" checked> 인식 시 소리</label>
       <label class="check"><input id="set-multi" type="checkbox" checked> 한 화면에서 여러 개 동시 인식</label>
