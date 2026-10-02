@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 
 // ---------- Storage ----------
 const store = {
@@ -103,6 +103,7 @@ const cmpCode = (a, b) => a.localeCompare(b, undefined, { numeric: true });
 const byCode = (a, b) => cmpCode(a.code, b.code);
 
 const isLocation = (code) => !!settings.locPrefix && code.startsWith(settings.locPrefix);
+const locShort = (loc) => items[loc]?.name || loc || '';
 const locLabel = (loc) => (loc ? (items[loc]?.name ? `${items[loc].name} (${loc})` : loc) : '');
 
 // Split "A0012" -> { prefix: "A", num: 12, width: 4 }
@@ -273,6 +274,8 @@ async function loop() {
       } catch (e) {
         console.warn('detect failed', e);
       }
+      // Scanning may have been stopped (or the mode changed) while detect() was running
+      if (!running) return;
       const ms = performance.now() - t0;
       msAvg = msAvg ? msAvg * 0.9 + ms * 0.1 : ms;
       $('#stat-ms').textContent = Math.round(msAvg) + ' ms/프레임';
@@ -476,7 +479,7 @@ function renderSession(highlight = []) {
     ul.innerHTML = [...session].sort(byCode).map((s) => {
       const it = items[s.code];
       const cls = highlight.includes(s.code) ? ' class="new"' : '';
-      const sub = [escapeHtml(s.code), it?.memo && escapeHtml(it.memo), s.loc && '📍' + escapeHtml(locLabel(s.loc))].filter(Boolean).join(' · ');
+      const sub = [escapeHtml(s.code), it?.memo && escapeHtml(it.memo), s.loc && '📍' + escapeHtml(locShort(s.loc))].filter(Boolean).join(' · ');
       return `<li${cls}>
         <div class="main">
           <div class="name${it ? '' : ' unknown'}">${modeBadge(s.action)}${it ? escapeHtml(it.name) : '미등록'}</div>
@@ -570,7 +573,7 @@ function renderMissing() {
     ? missingItems.map((it) => `<li>
         <div class="main">
           <div class="name">${it.status ? `<span class="badge">${escapeHtml(it.status)}</span>` : ''}${escapeHtml(it.name)}</div>
-          <div class="code">${escapeHtml(it.code)}${it.loc ? ' · 📍' + escapeHtml(locLabel(it.loc)) : ''}</div>
+          <div class="code">${escapeHtml(it.code)}${it.loc ? ' · 📍' + escapeHtml(locShort(it.loc)) : ''}</div>
         </div>
         <button data-find="${escapeHtml(it.code)}">찾기</button>
       </li>`).join('')
@@ -682,7 +685,7 @@ function renderItems() {
   }
   ul.innerHTML = list.map(([code, it]) => {
     const badge = isLocation(code) ? '<span class="badge loc">위치</span>' : it.status ? `<span class="badge">${escapeHtml(it.status)}</span>` : '';
-    const sub = [escapeHtml(code), it.memo && escapeHtml(it.memo), it.loc && '📍' + escapeHtml(locLabel(it.loc))].filter(Boolean).join(' · ');
+    const sub = [escapeHtml(code), it.memo && escapeHtml(it.memo), it.loc && '📍' + escapeHtml(locShort(it.loc))].filter(Boolean).join(' · ');
     return `<li>
       <div class="main">
         <div class="name">${badge}${escapeHtml(it.name)}</div>
@@ -884,7 +887,7 @@ function renderRecord() {
 
   $('#hd-entries').innerHTML = [...rec.entries].sort(byCode).map((s) => {
     const it = items[s.code];
-    const sub = [escapeHtml(s.code), s.loc && '📍' + escapeHtml(locLabel(s.loc))].filter(Boolean).join(' · ');
+    const sub = [escapeHtml(s.code), s.loc && '📍' + escapeHtml(locShort(s.loc))].filter(Boolean).join(' · ');
     return `<li><div class="main">
         <div class="name${it ? '' : ' unknown'}">${modeBadge(s.action)}${it ? escapeHtml(it.name) : '미등록'}</div>
         <div class="code">${sub}</div>
@@ -938,7 +941,7 @@ function renderLog() {
   $('#log-list').innerHTML = list.length
     ? list.map((l) => {
       const it = items[l.code];
-      const sub = [escapeHtml(l.code), l.loc && '📍' + escapeHtml(locLabel(l.loc))].filter(Boolean).join(' · ');
+      const sub = [escapeHtml(l.code), l.loc && '📍' + escapeHtml(locShort(l.loc))].filter(Boolean).join(' · ');
       return `<li><div class="main">
           <div class="name${it ? '' : ' unknown'}">${modeBadge(l.action)}${it ? escapeHtml(it.name) : '미등록'}</div>
           <div class="code">${sub}</div>
