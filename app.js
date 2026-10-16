@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.6.2';
+const APP_VERSION = '0.7.0';
 
 // ---------- Storage ----------
 const store = {
@@ -306,18 +306,11 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Code handling (shared by camera and manual input) ----------
-// Extension points (notion.js): an interceptor returning a kind consumes the code;
-// listeners see every item code scanned outside find mode.
-const scanInterceptors = [];
+// Extension point (notion.js): listeners see every item code scanned outside find mode
 const scanListeners = [];
 
-// Returns what happened: 'new' | 'moved' | 'seen' | 'loc' | 'target' | 'ignored' | 'link'
+// Returns what happened: 'new' | 'moved' | 'seen' | 'loc' | 'target' | 'ignored'
 function processCode(code) {
-  for (const intercept of scanInterceptors) {
-    const kind = intercept(code);
-    if (kind) return kind;
-  }
-
   if (isLocation(code)) {
     if (ui.loc === code) return 'seen';
     setLocation(code);
@@ -401,7 +394,7 @@ function showFound(codes) {
   foundTimer = setTimeout(() => { banner.hidden = true; }, 2000);
 }
 
-const KIND_COLORS = { new: '#3fb950', moved: '#3fb950', seen: '#8b949e', loc: '#2f81f7', target: '#f2cc60', ignored: '#6e7681', link: '#a371f7' };
+const KIND_COLORS = { new: '#3fb950', moved: '#3fb950', seen: '#8b949e', loc: '#2f81f7', target: '#f2cc60', ignored: '#6e7681' };
 
 function drawOverlay(results) {
   const rect = overlay.getBoundingClientRect();

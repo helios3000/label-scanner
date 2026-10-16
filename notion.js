@@ -1,7 +1,8 @@
 'use strict';
 // Notion checklist sync. Talks to the Cloudflare Worker in worker/ (never to Notion directly).
-// Uses globals from app.js: store, items, settings, $, toast, askConfirm, beep, showTab,
-// saveItems, renderSession, nextNumber, scanInterceptors, scanListeners, isLocation, escapeHtml.
+// A scanned label checks the to-do whose name matches the label's item name (or the QR text itself).
+// Uses globals from app.js: store, items, settings, $, toast, askConfirm, beep, saveItems,
+// renderSession, nextNumber, scanListeners, isLocation, escapeHtml, fmtTime.
 
 const NT_GAP_MS = 350; // keep under Notion's request rate limit
 
@@ -9,33 +10,52 @@ const nt = Object.assign(
   { pageId: '', pages: [], todos: {}, loadedAt: {}, round: {} },
   store.get('ls.notion', {}),
 );
-// norm(text) -> { text, codes: [] }  (links survive page duplication because they key on text)
-let ntLinks = store.get('ls.notionLinks', {});
 let ntOutbox = store.get('ls.notionOutbox', []); // [{ page, key, checked }]
-let ntLink = null;      // { key, text } while linking labels to an item
 let ntFlushing = false;
 let ntLastError = '';
 
 const saveNt = () => store.set('ls.notion', nt);
-const saveLinks = () => store.set('ls.notionLinks', ntLinks);
 const saveOutbox = () => store.set('ls.notionOutbox', ntOutbox);
 
-const ntNorm = (s) => String(s || '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+// Match key: "IBP센서 (4ea)" and "ibp 센서" both -> "ibp센서"
+const ntKey = (s) => String(s || '').normalize('NFC').toLowerCase()
+  .replace(/\(?\s*\d+\s*ea\s*\)?/gi, '').replace(/\s+/g, '');
 // "파워케이블 4ea", "IBP센서 (4ea)" -> 4
 function ntNeed(text) {
   const m = /(\d+)\s*ea\b/i.exec(text || '');
   return m ? Math.min(50, Math.max(1, +m[1])) : 1;
 }
 
-function ntCodeKey(code) {
-  for (const [key, link] of Object.entries(ntLinks)) if (link.codes.includes(code)) return key;
-  return null;
-}
-
 const ntConfigured = () => !!(settings.notionUrl && settings.notionKey);
 const ntTodos = () => nt.todos[nt.pageId] || [];
-const ntTodo = (key) => ntTodos().find((t) => ntNorm(t.text) === key);
+const ntTodo = (key) => ntTodos().find((t) => ntKey(t.text) === key);
 const ntRound = () => (nt.round[nt.pageId] ||= {});
+
+// Item codes whose registered name matches a checklist entry
+const ntLabelsFor = (key) => Object.keys(items).filter((c) => !isLocation(c) && ntKey(items[c].name) === key);
+
+// Which to-do does a scanned code belong to? QR text itself first, then the item name.
+function ntMatch(code) {
+  const byText = ntTodo(ntKey(code));
+  if (byText) return { todo: byText, direct: true };
+  const name = items[code]?.name;
+  const byName = name && ntTodo(ntKey(name));
+  return byName ? { todo: byName, direct: false } : null;
+}
+
+// v0.6.0-0.6.2 linked labels per item; names already carry that link, so drop the old tables
+if (store.get('ls.notionLinks', null)) {
+  for (const link of Object.values(store.get('ls.notionLinks', {}))) {
+    for (const code of link.codes || []) items[code] ||= { name: link.text, memo: '', loc: '', status: '', updated: Date.now() };
+  }
+  saveItems();
+  localStorage.removeItem('ls.notionLinks');
+  ntOutbox = ntOutbox.map((o) => ({ ...o, key: ntKey(o.key) }));
+  saveOutbox();
+  nt.round = {};
+  saveNt();
+}
+settings.notionOn ??= true;
 
 // ---------- Worker API ----------
 async function ntApi(path, body) {
@@ -74,7 +94,7 @@ async function ntLoadTodos(page = nt.pageId) {
   // Keep local changes that have not reached Notion yet
   for (const o of ntOutbox) {
     if (o.page !== page) continue;
-    const t = list.find((x) => ntNorm(x.text) === o.key);
+    const t = list.find((x) => ntKey(x.text) === o.key);
     if (t) t.checked = o.checked;
   }
   nt.todos[page] = list;
@@ -99,18 +119,18 @@ async function ntFlush() {
   try {
     while (ntOutbox.length) {
       const o = ntOutbox[0];
-      let todo = (nt.todos[o.page] || []).find((t) => ntNorm(t.text) === o.key);
+      const find = () => (nt.todos[o.page] || []).find((t) => ntKey(t.text) === o.key);
+      let todo = find();
       if (!todo) {
         await ntLoadTodos(o.page);
-        todo = (nt.todos[o.page] || []).find((t) => ntNorm(t.text) === o.key);
+        todo = find();
       }
-      const label = todo?.text || ntLinks[o.key]?.text || o.key;
       if (todo) {
         await ntApi('/check', { blockId: todo.id, checked: o.checked });
-        ntEvent(`✓ Notion 반영: ${label} ${o.checked ? '체크' : '해제'}`);
+        ntEvent(`✓ Notion 반영: ${todo.text} ${o.checked ? '체크' : '해제'}`);
       } else {
         // A missing item (renamed or deleted in Notion) is dropped so it cannot block the queue
-        ntEvent(`⚠ Notion에서 "${label}" 항목을 찾지 못했습니다 (이름이 바뀌었나요?)`, true);
+        ntEvent(`⚠ Notion에서 "${o.key}" 항목을 찾지 못했습니다 (이름이 바뀌었나요?)`, true);
       }
       ntOutbox.shift();
       saveOutbox();
@@ -124,6 +144,7 @@ async function ntFlush() {
   } finally {
     ntFlushing = false;
     renderNtSync();
+    if ($('#tab-notion').classList.contains('active')) renderNtList();
   }
 }
 
@@ -145,81 +166,49 @@ function renderNtEvents() {
 window.addEventListener('online', ntFlush);
 setInterval(() => { if (ntOutbox.length && !ntFlushing) ntFlush(); }, 20000);
 
-// ---------- Scan hooks ----------
-// Link mode: the next scanned labels get attached to the chosen checklist item
-scanInterceptors.push((code) => {
-  if (!ntLink) return null;
-  if (isLocation(code)) return 'ignored';
-  const { key, text } = ntLink;
-  const link = (ntLinks[key] ||= { text, codes: [] });
-  if (link.codes.includes(code)) return 'link';
+// ---------- Scan hook ----------
+// An item is checked once all of its labels were scanned in this round ("4ea" -> 4 labels)
+const ntNoted = new Set(); // explain each code once, not on every camera frame
+function ntNoteOnce(id, msg, warn) {
+  if (ntNoted.has(id)) return;
+  ntNoted.add(id);
+  ntEvent(msg, warn);
+}
 
-  const prevKey = ntCodeKey(code);
-  if (prevKey) ntLinks[prevKey].codes = ntLinks[prevKey].codes.filter((c) => c !== code);
-  link.codes.push(code);
-  saveLinks();
-  if (!items[code]) {
-    items[code] = { name: text, memo: '', loc: '', status: '', updated: Date.now() };
-    saveItems();
-  }
-
-  const need = ntNeed(text);
-  beep(1500, 0.1);
-  if (link.codes.length >= need) {
-    toast(`"${text}" 라벨 연결 완료 (${link.codes.length}/${need})`);
-    ntLink = null;
-  } else {
-    toast(`"${text}" ${link.codes.length}/${need} 연결됨 — 다음 라벨을 찍으세요`);
-  }
-  renderLinkBanner();
-  renderSession();
-  return 'link';
-});
-
-// Counting: an item is checked once all of its labels were scanned in this round
-const ntWarned = new Set(); // explain each blocked code once, not on every frame
 scanListeners.push((code) => {
-  const key = ntCodeKey(code);
-  if (!key) return;
-  const blocked = !settings.notionOn ? '설정에서 "스캔하면 Notion 체크리스트에 체크"가 꺼져 있습니다'
-    : !nt.pageId ? 'Notion 탭에서 체크리스트 페이지를 먼저 선택하세요'
-    : '';
-  if (blocked) {
-    if (!ntWarned.has(code + blocked)) { ntWarned.add(code + blocked); ntEvent(`⚠ ${code}: ${blocked}`, true); }
-    return;
+  if (!ntConfigured() || isLocation(code)) return;
+  if (!settings.notionOn) return ntNoteOnce('off', '⚠ 설정에서 "스캔하면 Notion 체크리스트에 체크"가 꺼져 있습니다', true);
+  if (!nt.pageId) return ntNoteOnce('nopage', '⚠ Notion 탭에서 체크리스트 페이지를 먼저 선택하세요', true);
+  if (!ntTodos().length) return ntNoteOnce('notodos', '⚠ Notion 탭에서 "Notion에서 불러오기"를 먼저 눌러 주세요', true);
+
+  const match = ntMatch(code);
+  if (!match) {
+    const name = items[code]?.name;
+    return ntNoteOnce('nomatch:' + code, `${code}${name ? ` (${name})` : ''}: 체크리스트에 같은 이름의 항목이 없습니다`);
   }
-  const round = ntRound();
-  const seenCodes = (round[key] ||= []);
+  const { todo, direct } = match;
+  const key = ntKey(todo.text);
+  const seenCodes = (ntRound()[key] ||= []);
   if (seenCodes.includes(code)) return;
   seenCodes.push(code);
   saveNt();
 
-  const todo = ntTodo(key);
-  const text = todo?.text || ntLinks[key].text;
-  const need = ntNeed(text);
+  // Identical QR texts cannot be told apart, so a label holding the item name counts as complete
+  const need = direct ? 1 : ntNeed(todo.text);
   if (seenCodes.length >= need) {
     // Always send: the cached state may be stale if someone unchecked it in Notion meanwhile
     ntQueue(key, true);
     beep(2200, 0.12, 0.1);
-    toast(`✅ ${text} 체크`);
-    ntEvent(`${code}: "${text}" 체크 → 전송 중`);
+    toast(`✅ ${todo.text} 체크`);
+    ntEvent(`${code}: "${todo.text}" 체크 → 전송 중`);
   } else {
-    toast(`${text} ${seenCodes.length}/${need}`);
-    ntEvent(`${code}: "${text}" ${seenCodes.length}/${need}`);
+    toast(`${todo.text} ${seenCodes.length}/${need}`);
+    ntEvent(`${code}: "${todo.text}" ${seenCodes.length}/${need}`);
   }
   if ($('#tab-notion').classList.contains('active')) renderNtList();
 });
 
 // ---------- UI ----------
-function renderLinkBanner() {
-  const banner = $('#link-banner');
-  banner.hidden = !ntLink;
-  if (!ntLink) return;
-  const have = ntLinks[ntLink.key]?.codes.length || 0;
-  $('#link-text').textContent = `🔗 "${ntLink.text}"에 연결할 라벨을 찍으세요 (${have}/${ntNeed(ntLink.text)})`;
-}
-$('#link-cancel').addEventListener('click', () => { ntLink = null; renderLinkBanner(); });
-
 function renderNtPages() {
   const sel = $('#nt-page');
   const pages = [...nt.pages];
@@ -250,15 +239,14 @@ function renderNtList() {
   const round = ntRound();
   let section = null;
   ul.innerHTML = todos.map((t, i) => {
-    const key = ntNorm(t.text);
+    const key = ntKey(t.text);
     const need = ntNeed(t.text);
-    const linked = ntLinks[key]?.codes || [];
+    const labels = ntLabelsFor(key);
     const scanned = round[key]?.length || 0;
     const head = t.section !== section ? `<li class="section">${escapeHtml((section = t.section) || '기타')}</li>` : '';
     const sub = [
-      `<span class="${linked.length >= need ? '' : 'warn'}">라벨 ${linked.length}/${need}</span>`,
-      scanned ? `이번 스캔 ${Math.min(scanned, need)}/${need}` : '',
-      linked.length ? escapeHtml(linked.join(', ')) : '',
+      need > 1 ? `이번 스캔 ${Math.min(scanned, need)}/${need}` : '',
+      labels.length ? `라벨 ${escapeHtml(labels.join(', '))}` : '<span class="warn">라벨 없음</span>',
     ].filter(Boolean).join(' · ');
     return `${head}<li class="todo${t.checked ? ' done' : ''}">
       <button class="cb" data-toggle="${i}" aria-label="체크">${t.checked ? '✓' : ''}</button>
@@ -266,7 +254,6 @@ function renderNtList() {
         <div class="name">${escapeHtml(t.text)}</div>
         <div class="code">${sub}</div>
       </div>
-      <button data-link="${i}">연결</button>
     </li>`;
   }).join('');
 }
@@ -295,6 +282,7 @@ $('#nt-page').addEventListener('change', async (e) => {
   nt.pageId = e.target.value;
   nt.pageTitle = e.target.selectedOptions[0]?.textContent || '';
   saveNt();
+  ntNoted.clear();
   renderNtList();
   if (!nt.pageId) return;
   try { await ntLoadTodos(); ntLastError = ''; } catch (err) { ntLastError = err.message; }
@@ -322,63 +310,44 @@ $('#nt-uncheck-all').addEventListener('click', async () => {
   if (!(await askConfirm(`체크된 ${checked.length}개 항목을 모두 해제하고 새로 시작할까요?`))) return;
   nt.round[nt.pageId] = {};
   saveNt();
-  checked.forEach((t) => ntQueue(ntNorm(t.text), false));
+  ntNoted.clear();
+  checked.forEach((t) => ntQueue(ntKey(t.text), false));
   renderNtList();
 });
 
-$('#nt-list').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  const todo = ntTodos()[+(btn.dataset.toggle ?? btn.dataset.link)];
+$('#nt-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-toggle]');
+  const todo = btn && ntTodos()[+btn.dataset.toggle];
   if (!todo) return;
-  const key = ntNorm(todo.text);
-
-  if (btn.dataset.toggle != null) {
-    ntQueue(key, !todo.checked);
-    renderNtList();
-    return;
-  }
-
-  const link = ntLinks[key];
-  if (link?.codes.length >= ntNeed(todo.text)) {
-    if (!(await askConfirm(`"${todo.text}"에 연결된 라벨(${link.codes.join(', ')})을 지우고 다시 연결할까요?`))) return;
-    link.codes = [];
-    saveLinks();
-  }
-  ntLink = { key, text: todo.text };
-  ensureAudio();
-  renderLinkBanner();
-  showTab('scan');
-  window.scrollTo(0, 0);
+  ntQueue(ntKey(todo.text), !todo.checked);
+  renderNtList();
 });
 
+// Make QR labels for checklist entries that have fewer labels than they need
 $('#nt-make-labels').addEventListener('click', async () => {
-  const todos = ntTodos();
-  const missing = todos
-    .map((t) => ({ t, key: ntNorm(t.text), need: ntNeed(t.text) }))
-    .map((x) => ({ ...x, have: ntLinks[x.key]?.codes.length || 0 }))
+  const missing = ntTodos()
+    .map((t) => ({ t, key: ntKey(t.text), need: ntNeed(t.text) }))
+    .map((x) => ({ ...x, have: ntLabelsFor(x.key).length }))
     .filter((x) => x.have < x.need);
   const total = missing.reduce((n, x) => n + x.need - x.have, 0);
-  if (!total) return toast('모든 항목에 라벨이 연결되어 있습니다');
+  if (!total) return toast('모든 항목에 라벨이 있습니다');
   if (!(await askConfirm(`${missing.length}개 항목에 쓸 라벨 ${total}개를 새로 만들까요?`))) return;
 
   const prefix = settings.labelPrefix ?? 'A';
   const digits = settings.labelDigits ?? 4;
   let n = nextNumber(prefix);
   const print = [];
-  for (const { t, key, need, have } of missing) {
-    const link = (ntLinks[key] ||= { text: t.text, codes: [] });
+  for (const { t, need, have } of missing) {
     for (let i = have; i < need; i++) {
       const code = prefix + String(n++).padStart(digits, '0');
-      link.codes.push(code);
       items[code] = { name: t.text, memo: '', loc: '', status: '', updated: Date.now() };
       print.push({ code, caption: need > 1 ? `${t.text} (${i + 1}/${need})` : t.text });
     }
   }
-  saveLinks();
   saveItems();
   store.set('ls.print', print);
   renderNtList();
+  renderSession();
   window.open('test-labels.html?from=app&size=20', '_blank');
 });
 
@@ -394,6 +363,7 @@ function ntSaveSettings() {
   settings.notionKey = $('#set-nt-key').value.trim();
   settings.notionOn = $('#set-nt-on').checked;
   store.set('ls.settings', settings);
+  ntNoted.delete('off');
 }
 for (const id of ['#set-nt-url', '#set-nt-key', '#set-nt-on']) {
   $(id).addEventListener('input', ntSaveSettings);
@@ -414,6 +384,5 @@ $('#nt-test').addEventListener('click', async () => {
   }
 });
 
-renderLinkBanner();
 renderNtEvents();
 ntFlush();
