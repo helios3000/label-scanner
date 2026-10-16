@@ -282,10 +282,7 @@ function renderNtList() {
     const labels = ntLabelsFor(key);
     const scanned = round[key]?.length || 0;
     const head = t.section !== section ? `<li class="section">${escapeHtml((section = t.section) || '기타')}</li>` : '';
-    const sub = [
-      need > 1 ? `이번 스캔 ${Math.min(scanned, need)}/${need}` : '',
-      labels.length ? `라벨 ${escapeHtml(labels.join(', '))}` : '<span class="warn">등록된 라벨 없음</span>',
-    ].filter(Boolean).join(' · ');
+    const sub = need > 1 ? `<div class="code">이번 스캔 ${Math.min(scanned, need)}/${need}</div>` : '';
     const recount = need > 1 && scanned > 0 && scanned < need
       ? `<button data-recount="${i}">다시 찍기</button>` : '';
     const addLabel = labels.length < need ? `<button data-addlabel="${i}">라벨 입력</button>` : '';
@@ -293,7 +290,7 @@ function renderNtList() {
       <button class="cb" data-toggle="${i}" aria-label="체크">${t.checked ? '✓' : ''}</button>
       <div class="main">
         <div class="name">${escapeHtml(t.text)}</div>
-        <div class="code">${sub}</div>
+        ${sub}
       </div>
       ${recount}${addLabel}
     </li>`;

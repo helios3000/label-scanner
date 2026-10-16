@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.7.8';
+const APP_VERSION = '0.7.9';
 
 // ---------- Storage ----------
 const store = {
