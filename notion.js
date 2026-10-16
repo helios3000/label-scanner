@@ -214,7 +214,7 @@ scanListeners.push((code) => {
     const name = items[code]?.name;
     return ntNoteOnce('nomatch:' + code, `${code}${name ? ` (${name})` : ''}: 체크리스트에 같은 이름의 항목이 없습니다`);
   }
-  const { todo, direct, numbered } = match;
+  const { todo, direct } = match;
   const key = ntKey(todo.text);
   // Remember name-labels so the Notion tab lists them and "QR 만들기" does not duplicate them
   if (direct && !items[code]) {
@@ -240,9 +240,6 @@ scanListeners.push((code) => {
     beep(2200, 0.12, 0.1);
     toast(`✅ ${todo.text} 체크`);
     ntEvent(`${code}: "${todo.text}" 체크 → 전송 중`);
-  } else if (direct && !numbered) {
-    const base = todo.text.replace(/\(?\s*\d+\s*ea\s*\)?/gi, '').trim();
-    toast(`${todo.text} ${seenCodes.length}/${need} — 같은 QR은 Notion 탭의 "다시 찍기"를 누르고 찍거나, "${base} 1"~"${base} ${need}"처럼 번호를 붙여 만드세요`);
   } else {
     toast(`${todo.text} ${seenCodes.length}/${need}`);
   }
@@ -367,7 +364,6 @@ $('#nt-list').addEventListener('click', (e) => {
     ntRecount = ntKey(todo.text);
     showTab('scan');
     window.scrollTo(0, 0);
-    toast(`"${todo.text}" 라벨을 한 번 더 찍으세요`);
     return;
   }
   ntQueue(ntKey(todo.text), !todo.checked);
