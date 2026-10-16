@@ -356,14 +356,23 @@ $('#nt-make-labels').addEventListener('click', async () => {
 $('#set-nt-url').value = settings.notionUrl || '';
 $('#set-nt-key').value = settings.notionKey || '';
 $('#set-nt-on').checked = !!settings.notionOn;
-for (const [id, key, prop] of [['#set-nt-url', 'notionUrl', 'value'], ['#set-nt-key', 'notionKey', 'value'], ['#set-nt-on', 'notionOn', 'checked']]) {
-  $(id).addEventListener('change', (e) => {
-    settings[key] = typeof e.target[prop] === 'string' ? e.target[prop].trim() : e.target[prop];
-    store.set('ls.settings', settings);
-  });
+// Read the fields directly: on iOS the button tap can arrive before the input's change event
+function ntSaveSettings() {
+  let url = $('#set-nt-url').value.trim();
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  settings.notionUrl = url;
+  settings.notionKey = $('#set-nt-key').value.trim();
+  settings.notionOn = $('#set-nt-on').checked;
+  store.set('ls.settings', settings);
+}
+for (const id of ['#set-nt-url', '#set-nt-key', '#set-nt-on']) {
+  $(id).addEventListener('input', ntSaveSettings);
+  $(id).addEventListener('change', ntSaveSettings);
 }
 $('#nt-test').addEventListener('click', async () => {
-  if (!ntConfigured()) return toast('Worker 주소와 앱 키를 입력하세요');
+  ntSaveSettings();
+  if (!settings.notionUrl) return toast('Worker 주소를 입력하세요');
+  if (!settings.notionKey) return toast('앱 키를 입력하세요 (APP_KEY로 등록한 비밀번호)');
   try {
     await ntApi('/ping');
     const pages = await ntApi('/pages?q=');
