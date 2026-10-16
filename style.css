@@ -104,6 +104,8 @@ button.icon { flex: none !important; padding: 10px 14px; }
 .list li.todo.done .cb { background: var(--accent); border-color: var(--accent); }
 .list li.todo.done .name { color: var(--muted); text-decoration: line-through; }
 .warn { color: var(--warn); }
+.list.log li { font-size: 13px; border-bottom: 0; padding: 3px 4px; }
+.list.log .time { margin-right: 6px; }
 
 #dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 #dialog .card { width: 100%; max-width: 360px; }

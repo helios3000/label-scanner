@@ -104,8 +104,14 @@ async function ntFlush() {
         await ntLoadTodos(o.page);
         todo = (nt.todos[o.page] || []).find((t) => ntNorm(t.text) === o.key);
       }
-      if (todo) await ntApi('/check', { blockId: todo.id, checked: o.checked });
-      // A missing item (renamed or deleted in Notion) is dropped so it cannot block the queue
+      const label = todo?.text || ntLinks[o.key]?.text || o.key;
+      if (todo) {
+        await ntApi('/check', { blockId: todo.id, checked: o.checked });
+        ntEvent(`✓ Notion 반영: ${label} ${o.checked ? '체크' : '해제'}`);
+      } else {
+        // A missing item (renamed or deleted in Notion) is dropped so it cannot block the queue
+        ntEvent(`⚠ Notion에서 "${label}" 항목을 찾지 못했습니다 (이름이 바뀌었나요?)`, true);
+      }
       ntOutbox.shift();
       saveOutbox();
       ntLastError = '';
@@ -114,10 +120,26 @@ async function ntFlush() {
     }
   } catch (e) {
     ntLastError = e.message;
+    ntEvent(`⚠ Notion 전송 실패: ${e.message}`, true);
   } finally {
     ntFlushing = false;
     renderNtSync();
   }
+}
+
+// Recent sync activity, shown in the Notion tab so failures are visible on the phone
+let ntEvents = store.get('ls.notionEvents', []);
+function ntEvent(msg, warn = false) {
+  ntEvents.unshift({ time: Date.now(), msg, warn });
+  ntEvents = ntEvents.slice(0, 20);
+  store.set('ls.notionEvents', ntEvents);
+  if (warn) toast(msg);
+  renderNtEvents();
+}
+function renderNtEvents() {
+  $('#nt-log').innerHTML = ntEvents.length
+    ? ntEvents.slice(0, 5).map((e) => `<li class="${e.warn ? 'warn' : ''}"><span class="time">${fmtTime(e.time)}</span> ${escapeHtml(e.msg)}</li>`).join('')
+    : '<li class="hint">아직 기록이 없습니다</li>';
 }
 
 window.addEventListener('online', ntFlush);
@@ -155,10 +177,17 @@ scanInterceptors.push((code) => {
 });
 
 // Counting: an item is checked once all of its labels were scanned in this round
+const ntWarned = new Set(); // explain each blocked code once, not on every frame
 scanListeners.push((code) => {
-  if (!settings.notionOn || !nt.pageId) return;
   const key = ntCodeKey(code);
   if (!key) return;
+  const blocked = !settings.notionOn ? '설정에서 "스캔하면 Notion 체크리스트에 체크"가 꺼져 있습니다'
+    : !nt.pageId ? 'Notion 탭에서 체크리스트 페이지를 먼저 선택하세요'
+    : '';
+  if (blocked) {
+    if (!ntWarned.has(code + blocked)) { ntWarned.add(code + blocked); ntEvent(`⚠ ${code}: ${blocked}`, true); }
+    return;
+  }
   const round = ntRound();
   const seenCodes = (round[key] ||= []);
   if (seenCodes.includes(code)) return;
@@ -169,13 +198,14 @@ scanListeners.push((code) => {
   const text = todo?.text || ntLinks[key].text;
   const need = ntNeed(text);
   if (seenCodes.length >= need) {
-    if (!todo?.checked) {
-      ntQueue(key, true);
-      beep(2200, 0.12, 0.1);
-      toast(`✅ ${text} 체크`);
-    }
+    // Always send: the cached state may be stale if someone unchecked it in Notion meanwhile
+    ntQueue(key, true);
+    beep(2200, 0.12, 0.1);
+    toast(`✅ ${text} 체크`);
+    ntEvent(`${code}: "${text}" 체크 → 전송 중`);
   } else {
     toast(`${text} ${seenCodes.length}/${need}`);
+    ntEvent(`${code}: "${text}" ${seenCodes.length}/${need}`);
   }
   if ($('#tab-notion').classList.contains('active')) renderNtList();
 });
@@ -385,4 +415,5 @@ $('#nt-test').addEventListener('click', async () => {
 });
 
 renderLinkBanner();
+renderNtEvents();
 ntFlush();
