@@ -170,20 +170,12 @@ async function ntFlush() {
   }
 }
 
-// Recent sync activity, shown in the Notion tab so failures are visible on the phone
-let ntEvents = store.get('ls.notionEvents', []);
+// Problems are shown as toasts; routine activity only goes to the console
 function ntEvent(msg, warn = false) {
-  ntEvents.unshift({ time: Date.now(), msg, warn });
-  ntEvents = ntEvents.slice(0, 20);
-  store.set('ls.notionEvents', ntEvents);
   if (warn) toast(msg);
-  renderNtEvents();
+  else console.info('[notion]', msg);
 }
-function renderNtEvents() {
-  $('#nt-log').innerHTML = ntEvents.length
-    ? ntEvents.slice(0, 5).map((e) => `<li class="${e.warn ? 'warn' : ''}"><span class="time">${fmtTime(e.time)}</span> ${escapeHtml(e.msg)}</li>`).join('')
-    : '<li class="hint">아직 기록이 없습니다</li>';
-}
+localStorage.removeItem('ls.notionEvents'); // activity log from v0.6.2-0.7.1
 
 window.addEventListener('online', ntFlush);
 setInterval(() => { if (ntOutbox.length && !ntFlushing) ntFlush(); }, 20000);
@@ -411,6 +403,5 @@ $('#nt-test').addEventListener('click', async () => {
   }
 });
 
-renderNtEvents();
 ntSyncNames();
 ntFlush();
