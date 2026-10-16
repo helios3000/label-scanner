@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.7.6';
+const APP_VERSION = '0.7.7';
 
 // ---------- Storage ----------
 const store = {
@@ -459,6 +459,13 @@ $('#mode').addEventListener('change', (e) => {
   if (ui.mode === 'find' && !ui.find) $('#find-target').focus();
 });
 $('#find-target').addEventListener('input', (e) => { ui.find = e.target.value; saveUi(); });
+$('#find-exit').addEventListener('click', () => {
+  ui.mode = 'scan';
+  ui.find = '';
+  saveUi();
+  renderModeBar();
+  $('#found-banner').hidden = true;
+});
 $('#loc-clear').addEventListener('click', () => { ui.loc = ''; saveUi(); renderModeBar(); });
 
 $('#btn-manual').addEventListener('click', async () => {
