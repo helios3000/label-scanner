@@ -31,8 +31,29 @@ const ntTodos = () => nt.todos[nt.pageId] || [];
 const ntTodo = (key) => ntTodos().find((t) => ntKey(t.text) === key);
 const ntRound = () => (nt.round[nt.pageId] ||= {});
 
-// Item codes whose registered name matches a checklist entry
-const ntLabelsFor = (key) => Object.keys(items).filter((c) => !isLocation(c) && ntKey(items[c].name) === key);
+// Item codes that will check this entry. A code whose QR text is itself another entry's name
+// belongs to that entry, whatever its registered name says (same rule as ntMatch).
+function ntLabelsFor(key) {
+  return Object.keys(items).filter((c) => {
+    if (isLocation(c)) return false;
+    const direct = ntTodo(ntKey(c));
+    return direct ? ntKey(direct.text) === key : ntKey(items[c].name) === key;
+  });
+}
+
+// QR text names an entry: make the item's registered name agree with it
+function ntSyncNames() {
+  let fixed = 0;
+  for (const code of Object.keys(items)) {
+    const direct = ntTodo(ntKey(code));
+    if (direct && items[code].name !== direct.text) {
+      ntEvent(`${code}: 품목 이름 "${items[code].name}" → "${direct.text}"로 맞춤`);
+      items[code].name = direct.text;
+      fixed++;
+    }
+  }
+  if (fixed) { saveItems(); renderSession(); }
+}
 
 // Which to-do does a scanned code belong to? QR text itself first, then the item name.
 function ntMatch(code) {
@@ -100,6 +121,7 @@ async function ntLoadTodos(page = nt.pageId) {
   nt.todos[page] = list;
   nt.loadedAt[page] = Date.now();
   saveNt();
+  if (page === nt.pageId) ntSyncNames();
 }
 
 // ---------- Outbox (offline-safe check/uncheck) ----------
@@ -188,6 +210,11 @@ scanListeners.push((code) => {
   }
   const { todo, direct } = match;
   const key = ntKey(todo.text);
+  // Remember name-labels so the Notion tab lists them and "QR 만들기" does not duplicate them
+  if (direct && !items[code]) {
+    items[code] = { name: todo.text, memo: '', loc: '', status: '', updated: Date.now() };
+    saveItems();
+  }
   const seenCodes = (ntRound()[key] ||= []);
   if (seenCodes.includes(code)) return;
   seenCodes.push(code);
@@ -246,7 +273,7 @@ function renderNtList() {
     const head = t.section !== section ? `<li class="section">${escapeHtml((section = t.section) || '기타')}</li>` : '';
     const sub = [
       need > 1 ? `이번 스캔 ${Math.min(scanned, need)}/${need}` : '',
-      labels.length ? `라벨 ${escapeHtml(labels.join(', '))}` : '<span class="warn">라벨 없음</span>',
+      labels.length ? `라벨 ${escapeHtml(labels.join(', '))}` : '<span class="warn">등록된 라벨 없음</span>',
     ].filter(Boolean).join(' · ');
     return `${head}<li class="todo${t.checked ? ' done' : ''}">
       <button class="cb" data-toggle="${i}" aria-label="체크">${t.checked ? '✓' : ''}</button>
@@ -385,4 +412,5 @@ $('#nt-test').addEventListener('click', async () => {
 });
 
 renderNtEvents();
+ntSyncNames();
 ntFlush();
