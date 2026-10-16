@@ -148,8 +148,10 @@ async function ntFlush() {
         todo = find();
       }
       if (todo) {
+        const t0 = performance.now();
         await ntApi('/check', { blockId: todo.id, checked: o.checked });
-        ntEvent(`✓ Notion 반영: ${todo.text} ${o.checked ? '체크' : '해제'}`);
+        // Time until Notion's server stored it; the Notion app may show it later than this
+        toast(`✓ Notion 저장 완료: ${todo.text} (${((performance.now() - t0) / 1000).toFixed(1)}초)`);
       } else {
         // A missing item (renamed or deleted in Notion) is dropped so it cannot block the queue
         ntEvent(`⚠ Notion에서 "${o.key}" 항목을 찾지 못했습니다 (이름이 바뀌었나요?)`, true);
