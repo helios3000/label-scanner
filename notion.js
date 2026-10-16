@@ -288,13 +288,14 @@ function renderNtList() {
     ].filter(Boolean).join(' · ');
     const recount = need > 1 && scanned > 0 && scanned < need
       ? `<button data-recount="${i}">다시 찍기</button>` : '';
+    const addLabel = labels.length < need ? `<button data-addlabel="${i}">라벨 입력</button>` : '';
     return `${head}<li class="todo${t.checked ? ' done' : ''}">
       <button class="cb" data-toggle="${i}" aria-label="체크">${t.checked ? '✓' : ''}</button>
       <div class="main">
         <div class="name">${escapeHtml(t.text)}</div>
         <div class="code">${sub}</div>
       </div>
-      ${recount}
+      ${recount}${addLabel}
     </li>`;
   }).join('');
 }
@@ -356,10 +357,29 @@ $('#nt-uncheck-all').addEventListener('click', async () => {
   renderNtList();
 });
 
+// Register a label by typing its QR text instead of scanning it
+async function ntAddLabel(todo) {
+  const key = ntKey(todo.text);
+  const need = ntNeed(todo.text);
+  const base = todo.text.replace(/\(?\s*\d+\s*ea\s*\)?/gi, '').trim();
+  const have = ntLabelsFor(key).length;
+  const code = (await askText(`"${todo.text}" 라벨의 QR 내용`, need > 1 ? `${base} ${have + 1}` : base))?.trim();
+  if (!code) return;
+  if (isLocation(code)) return toast('위치 라벨 코드는 쓸 수 없습니다');
+  const other = ntDirect(code)?.todo;
+  if (other && ntKey(other.text) !== key) return toast(`"${code}"는 "${other.text}" 항목의 이름입니다`);
+  if (ntLabelsFor(key).includes(code)) return toast('이미 등록된 라벨입니다');
+  items[code] = { ...(items[code] || { memo: '', loc: '', status: '' }), name: todo.text, updated: Date.now() };
+  saveItems();
+  renderNtList();
+  renderSession();
+}
+
 $('#nt-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-toggle], button[data-recount]');
-  const todo = btn && ntTodos()[+(btn.dataset.toggle ?? btn.dataset.recount)];
+  const btn = e.target.closest('button[data-toggle], button[data-recount], button[data-addlabel]');
+  const todo = btn && ntTodos()[+(btn.dataset.toggle ?? btn.dataset.recount ?? btn.dataset.addlabel)];
   if (!todo) return;
+  if (btn.dataset.addlabel != null) return ntAddLabel(todo);
   if (btn.dataset.recount != null) {
     ntRecount = ntKey(todo.text);
     showTab('scan');
