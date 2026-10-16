@@ -31,12 +31,23 @@ const ntTodos = () => nt.todos[nt.pageId] || [];
 const ntTodo = (key) => ntTodos().find((t) => ntKey(t.text) === key);
 const ntRound = () => (nt.round[nt.pageId] ||= {});
 
-// Item codes that will check this entry. A code whose QR text is itself another entry's name
+// QR text that names an entry, optionally numbered so several labels of a "4ea" item differ:
+// "파워케이블", "파워케이블 3", "파워케이블-3", "파워케이블 #3", "파워케이블 3/4"
+function ntDirect(code) {
+  const key = ntKey(code);
+  const exact = ntTodo(key);
+  if (exact) return { todo: exact, numbered: false };
+  const base = key.replace(/[(#\-_.]?\d+(\/\d+)?\)?$/, '');
+  const numbered = base !== key && base ? ntTodo(base) : null;
+  return numbered ? { todo: numbered, numbered: true } : null;
+}
+
+// Item codes that will check this entry. A code whose QR text is itself an entry's name
 // belongs to that entry, whatever its registered name says (same rule as ntMatch).
 function ntLabelsFor(key) {
   return Object.keys(items).filter((c) => {
     if (isLocation(c)) return false;
-    const direct = ntTodo(ntKey(c));
+    const direct = ntDirect(c)?.todo;
     return direct ? ntKey(direct.text) === key : ntKey(items[c].name) === key;
   });
 }
@@ -45,7 +56,7 @@ function ntLabelsFor(key) {
 function ntSyncNames() {
   let fixed = 0;
   for (const code of Object.keys(items)) {
-    const direct = ntTodo(ntKey(code));
+    const direct = ntDirect(code)?.todo;
     if (direct && items[code].name !== direct.text) {
       ntEvent(`${code}: 품목 이름 "${items[code].name}" → "${direct.text}"로 맞춤`);
       items[code].name = direct.text;
@@ -57,11 +68,11 @@ function ntSyncNames() {
 
 // Which to-do does a scanned code belong to? QR text itself first, then the item name.
 function ntMatch(code) {
-  const byText = ntTodo(ntKey(code));
-  if (byText) return { todo: byText, direct: true };
+  const direct = ntDirect(code);
+  if (direct) return { ...direct, direct: true };
   const name = items[code]?.name;
   const byName = name && ntTodo(ntKey(name));
-  return byName ? { todo: byName, direct: false } : null;
+  return byName ? { todo: byName, direct: false, numbered: false } : null;
 }
 
 // v0.6.0-0.6.2 linked labels per item; names already carry that link, so drop the old tables
@@ -185,6 +196,7 @@ setInterval(() => { if (ntOutbox.length && !ntFlushing) ntFlush(); }, 20000);
 // ---------- Scan hook ----------
 // An item is checked once all of its labels were scanned in this round ("4ea" -> 4 labels)
 const ntNoted = new Set(); // explain each code once, not on every camera frame
+let ntRecount = null;      // item key whose next scan may repeat an already-counted QR
 function ntNoteOnce(id, msg, warn) {
   if (ntNoted.has(id)) return;
   ntNoted.add(id);
@@ -202,7 +214,7 @@ scanListeners.push((code) => {
     const name = items[code]?.name;
     return ntNoteOnce('nomatch:' + code, `${code}${name ? ` (${name})` : ''}: 체크리스트에 같은 이름의 항목이 없습니다`);
   }
-  const { todo, direct } = match;
+  const { todo, direct, numbered } = match;
   const key = ntKey(todo.text);
   // Remember name-labels so the Notion tab lists them and "QR 만들기" does not duplicate them
   if (direct && !items[code]) {
@@ -210,21 +222,29 @@ scanListeners.push((code) => {
     saveItems();
   }
   const seenCodes = (ntRound()[key] ||= []);
-  if (seenCodes.includes(code)) return;
-  seenCodes.push(code);
+  if (seenCodes.includes(code)) {
+    // "다시 찍기" in the Notion tab lets the same QR count once more (one QR for a "4ea" item)
+    if (ntRecount !== key) return;
+    seenCodes.push(`${code}#${seenCodes.length + 1}`);
+  } else {
+    seenCodes.push(code);
+  }
+  ntRecount = null;
   saveNt();
 
-  // Identical QR texts cannot be told apart, so a label holding the item name counts as complete
-  const need = direct ? 1 : ntNeed(todo.text);
+  // Each distinct label counts once, so N identical QRs can never reach N/N
+  const need = ntNeed(todo.text);
   if (seenCodes.length >= need) {
     // Always send: the cached state may be stale if someone unchecked it in Notion meanwhile
     ntQueue(key, true);
     beep(2200, 0.12, 0.1);
     toast(`✅ ${todo.text} 체크`);
     ntEvent(`${code}: "${todo.text}" 체크 → 전송 중`);
+  } else if (direct && !numbered) {
+    const base = todo.text.replace(/\(?\s*\d+\s*ea\s*\)?/gi, '').trim();
+    toast(`${todo.text} ${seenCodes.length}/${need} — 같은 QR은 Notion 탭의 "다시 찍기"를 누르고 찍거나, "${base} 1"~"${base} ${need}"처럼 번호를 붙여 만드세요`);
   } else {
     toast(`${todo.text} ${seenCodes.length}/${need}`);
-    ntEvent(`${code}: "${todo.text}" ${seenCodes.length}/${need}`);
   }
   if ($('#tab-notion').classList.contains('active')) renderNtList();
 });
@@ -269,12 +289,15 @@ function renderNtList() {
       need > 1 ? `이번 스캔 ${Math.min(scanned, need)}/${need}` : '',
       labels.length ? `라벨 ${escapeHtml(labels.join(', '))}` : '<span class="warn">등록된 라벨 없음</span>',
     ].filter(Boolean).join(' · ');
+    const recount = need > 1 && scanned > 0 && scanned < need
+      ? `<button data-recount="${i}">다시 찍기</button>` : '';
     return `${head}<li class="todo${t.checked ? ' done' : ''}">
       <button class="cb" data-toggle="${i}" aria-label="체크">${t.checked ? '✓' : ''}</button>
       <div class="main">
         <div class="name">${escapeHtml(t.text)}</div>
         <div class="code">${sub}</div>
       </div>
+      ${recount}
     </li>`;
   }).join('');
 }
@@ -337,9 +360,16 @@ $('#nt-uncheck-all').addEventListener('click', async () => {
 });
 
 $('#nt-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-toggle]');
-  const todo = btn && ntTodos()[+btn.dataset.toggle];
+  const btn = e.target.closest('button[data-toggle], button[data-recount]');
+  const todo = btn && ntTodos()[+(btn.dataset.toggle ?? btn.dataset.recount)];
   if (!todo) return;
+  if (btn.dataset.recount != null) {
+    ntRecount = ntKey(todo.text);
+    showTab('scan');
+    window.scrollTo(0, 0);
+    toast(`"${todo.text}" 라벨을 한 번 더 찍으세요`);
+    return;
+  }
   ntQueue(ntKey(todo.text), !todo.checked);
   renderNtList();
 });

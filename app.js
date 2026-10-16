@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.7.3';
+const APP_VERSION = '0.7.4';
 
 // ---------- Storage ----------
 const store = {
@@ -54,7 +54,8 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 1800);
+  // Longer messages stay up long enough to read
+  toast._t = setTimeout(() => el.classList.remove('show'), Math.max(1800, msg.length * 90));
 }
 
 function escapeHtml(s) {
