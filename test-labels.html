@@ -7,6 +7,7 @@
 <style>
   :root { --line: #d0d7de; --muted: #57606a; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; padding: 16px; font: 14px/1.4 -apple-system, "Segoe UI", sans-serif; color: #111; background: #fff; }
   h1 { font-size: 20px; margin: 0 0 4px; }
   h2 { font-size: 16px; margin: 24px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
@@ -146,8 +147,29 @@ if (params.get('print') === '1') {
   document.querySelectorAll('.test-only').forEach((el) => { el.hidden = true; });
 }
 
+// Opened from the Notion tab: a fixed list of { code, caption } handed over via localStorage
+let fromApp = null;
+if (params.get('from') === 'app') {
+  try { fromApp = JSON.parse(localStorage.getItem('ls.print') || '[]'); } catch { fromApp = []; }
+  document.title = document.getElementById('title').textContent = '라벨 인쇄';
+  document.getElementById('sheet-title').textContent = `라벨 ${fromApp.length}개`;
+  document.querySelectorAll('.test-only').forEach((el) => { el.hidden = true; });
+  document.querySelectorAll('.controls label, #apply').forEach((el) => { el.hidden = true; });
+}
+
+function renderFromApp() {
+  const size = Math.max(4, +document.getElementById('size').value || 20);
+  const sheet = document.getElementById('sheet-grid');
+  sheet.innerHTML = '';
+  for (const { code, caption } of fromApp) {
+    const label = makeLabel(code, 'qr', size, `${code}\n${caption}`);
+    label.querySelector('.cap').style.cssText = `white-space: pre-line; text-align: center; max-width: ${size + 10}mm`;
+    sheet.appendChild(label);
+  }
+}
+
 document.getElementById('apply').addEventListener('click', render);
-render();
+fromApp ? renderFromApp() : render();
 </script>
 </body>
 </html>

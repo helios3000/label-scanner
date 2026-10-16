@@ -95,6 +95,16 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .grid2 label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
 
+/* Notion */
+.banner { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: rgba(163,113,247,.18); border: 1px solid #a371f7; font-size: 14px; }
+.banner span { flex: 1; }
+button.icon { flex: none !important; padding: 10px 14px; }
+.list li.section { display: block; padding: 14px 4px 4px; border-bottom: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.list li.todo .cb { flex: none; width: 30px; height: 30px; padding: 0; border-radius: 6px; font-size: 18px; font-weight: 700; color: #fff; }
+.list li.todo.done .cb { background: var(--accent); border-color: var(--accent); }
+.list li.todo.done .name { color: var(--muted); text-decoration: line-through; }
+.warn { color: var(--warn); }
+
 #dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
 #dialog .card { width: 100%; max-width: 360px; }
 #dialog-msg { font-size: 16px; line-height: 1.5; }

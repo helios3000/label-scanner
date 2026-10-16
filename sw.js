@@ -1,10 +1,11 @@
 // Bump CACHE when any cached file changes
-const CACHE = 'label-scanner-v9';
+const CACHE = 'label-scanner-v10';
 const ASSETS = [
   './',
   'index.html',
   'style.css',
   'app.js',
+  'notion.js',
   'manifest.json',
   'icon.svg',
   'icon-180.png',

@@ -20,6 +20,7 @@
     <button data-tab="scan" class="active">스캔</button>
     <button data-tab="items">품목</button>
     <button data-tab="history">기록</button>
+    <button data-tab="notion">노션</button>
     <button data-tab="settings">설정</button>
   </nav>
 </header>
@@ -40,6 +41,10 @@
         <span id="loc-text">위치 없음</span>
         <button id="loc-clear" class="chip-x" hidden>✕</button>
       </div>
+    </div>
+    <div id="link-banner" class="banner" hidden>
+      <span id="link-text"></span>
+      <button id="link-cancel" class="chip-x">취소</button>
     </div>
     <div class="row" id="find-row" hidden>
       <input id="find-target" placeholder="찾을 코드 (여러 개는 쉼표로)" autocomplete="off">
@@ -153,6 +158,33 @@
     </div>
   </section>
 
+  <!-- Notion tab -->
+  <section id="tab-notion" class="tab">
+    <div id="nt-setup" class="card" hidden>
+      <b>Notion 연동이 설정되지 않았습니다</b>
+      <p class="hint">설정 탭 → Notion 연동에서 Worker 주소와 앱 키를 입력하세요.</p>
+    </div>
+    <div id="nt-main">
+      <div class="row">
+        <select id="nt-page"><option value="">체크리스트 페이지 선택…</option></select>
+        <button id="nt-pages-refresh" class="icon" title="페이지 목록 새로고침">↻</button>
+      </div>
+      <div class="row">
+        <button id="nt-reload">Notion에서 불러오기</button>
+        <button id="nt-uncheck-all">전체 체크 해제</button>
+      </div>
+      <div class="row stats">
+        <span id="nt-progress"></span>
+        <span id="nt-sync"></span>
+      </div>
+      <div class="row">
+        <button id="nt-make-labels">라벨 없는 항목 QR 만들기</button>
+      </div>
+      <ul id="nt-list" class="list"></ul>
+      <p class="hint">항목의 "연결"을 누르고 라벨을 찍으면 그 라벨이 항목과 연결됩니다. "4ea"처럼 수량이 있는 항목은 라벨을 수량만큼 연결하고, 모두 찍혀야 체크됩니다.</p>
+    </div>
+  </section>
+
   <!-- Settings tab -->
   <section id="tab-settings" class="tab">
     <h3>스캔</h3>
@@ -169,6 +201,18 @@
       </label>
       <label class="check"><input id="set-sound" type="checkbox" checked> 인식 시 소리</label>
       <label class="check"><input id="set-multi" type="checkbox" checked> 한 화면에서 여러 개 동시 인식</label>
+    </div>
+
+    <h3>Notion 연동</h3>
+    <div class="card">
+      <label>Worker 주소
+        <input id="set-nt-url" placeholder="https://label-scanner-notion.….workers.dev" autocomplete="off" inputmode="url">
+      </label>
+      <label>앱 키 <small>(Worker에 등록한 APP_KEY와 같은 값)</small>
+        <input id="set-nt-key" type="password" autocomplete="off">
+      </label>
+      <label class="check"><input id="set-nt-on" type="checkbox"> 스캔하면 Notion 체크리스트에 체크</label>
+      <div class="row"><button id="nt-test">연결 테스트</button></div>
     </div>
 
     <h3>성능 · 배터리</h3>
@@ -238,5 +282,6 @@
 
 <script src="vendor/barcode-detector.js"></script>
 <script src="app.js"></script>
+<script src="notion.js"></script>
 </body>
 </html>

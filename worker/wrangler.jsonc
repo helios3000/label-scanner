@@ -1,0 +1,9 @@
+{
+  "name": "label-scanner-notion",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "vars": {
+    // Pages allowed to call this worker (comma separated)
+    "ALLOWED_ORIGINS": "https://helios3000.github.io,http://localhost:8765"
+  }
+}

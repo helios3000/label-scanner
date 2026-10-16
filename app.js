@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.6.0';
 
 // ---------- Storage ----------
 const store = {
@@ -118,6 +118,7 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + name));
   if (name === 'items') { renderItems(); refreshLabelMaker(); }
   if (name === 'history') renderHistoryTab();
+  if (name === 'notion') renderNotionTab();
 }
 document.querySelectorAll('nav button').forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.tab)));
 
@@ -305,8 +306,18 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- Code handling (shared by camera and manual input) ----------
-// Returns what happened: 'new' | 'moved' | 'seen' | 'loc' | 'target' | 'ignored'
+// Extension points (notion.js): an interceptor returning a kind consumes the code;
+// listeners see every item code scanned outside find mode.
+const scanInterceptors = [];
+const scanListeners = [];
+
+// Returns what happened: 'new' | 'moved' | 'seen' | 'loc' | 'target' | 'ignored' | 'link'
 function processCode(code) {
+  for (const intercept of scanInterceptors) {
+    const kind = intercept(code);
+    if (kind) return kind;
+  }
+
   if (isLocation(code)) {
     if (ui.loc === code) return 'seen';
     setLocation(code);
@@ -316,6 +327,8 @@ function processCode(code) {
   if (ui.mode === 'find') {
     return findTargets().includes(code) ? 'target' : 'ignored';
   }
+
+  scanListeners.forEach((fn) => fn(code));
 
   const now = Date.now();
   const existing = session.find((s) => s.code === code && s.action === ui.mode);
@@ -388,7 +401,7 @@ function showFound(codes) {
   foundTimer = setTimeout(() => { banner.hidden = true; }, 2000);
 }
 
-const KIND_COLORS = { new: '#3fb950', moved: '#3fb950', seen: '#8b949e', loc: '#2f81f7', target: '#f2cc60', ignored: '#6e7681' };
+const KIND_COLORS = { new: '#3fb950', moved: '#3fb950', seen: '#8b949e', loc: '#2f81f7', target: '#f2cc60', ignored: '#6e7681', link: '#a371f7' };
 
 function drawOverlay(results) {
   const rect = overlay.getBoundingClientRect();
